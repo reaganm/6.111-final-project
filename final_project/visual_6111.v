@@ -667,11 +667,11 @@ module vram_display(reset,clk,hcount,vcount,vr_pixel,
    output [18:0] vram_addr;
    input [35:0]  vram_read_data;
 
-   //forecast hcount & vcount 8 clock cycles ahead to get data from ZBT
-   wire [10:0] hcount_f = (hcount >= 1048) ? (hcount - 1048) : (hcount + 8);
-   wire [9:0] vcount_f = (hcount >= 1048) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+   //forecast hcount & vcount 13 clock cycles ahead to get data from ZBT
+   wire [10:0] hcount_f = (hcount >= 1043) ? (hcount - 1043) : (hcount + 13);
+   wire [9:0] vcount_f = (hcount >= 1043) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
       
-   wire [18:0] 	 vram_addr = {1'b0, vcount_f, hcount_f[9:2]};
+   wire [20:0] 	 vram_addr = {vcount_f[9:0], hcount_f[10:0]};
 
    wire [1:0] 	 hc4 = hcount[1:0];
    reg [15:0] 	 vr_pixel;
@@ -692,12 +692,10 @@ endmodule // vram_display
 /////////////////////////////////////////////////////////////////////////////
 // parameterized delay line 
 
-module delayN(clk,in,out);
+module delayN #(parameter NDELAY = 3)(clk,in,out);
    input clk;
    input in;
-   output out;
-
-   parameter NDELAY = 3;
+   output out;   
 
    reg [NDELAY-1:0] shiftreg;
    wire 	    out = shiftreg[NDELAY-1];
