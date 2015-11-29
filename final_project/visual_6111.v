@@ -448,7 +448,7 @@ module visual_6111(beep, audio_reset_b,
    wire [10:0] hcount;
    wire [9:0]  vcount;
    wire hsync,vsync,blank;
-   svga xvga1(clk,hcount,vcount,hsync,vsync,blank);
+   svga svga1(clk,hcount,vcount,hsync,vsync,blank);
 
    // wire up to ZBT ram
 
