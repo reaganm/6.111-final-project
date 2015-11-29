@@ -27,13 +27,13 @@ module rotation_tf;
 	// Inputs
 	reg clk;
 	reg reset;
-	reg [31:0] angle;
-	reg [11:0] x;
-	reg [11:0] y;
+	reg signed [31:0] angle;
+	reg signed [11:0] x;
+	reg signed [11:0] y;
 
 	// Outputs
-	wire [11:0] x_rot;
-	wire [10:0] y_rot;
+	wire signed [11:0] x_rot;
+	wire signed [10:0] y_rot;
 
 	// Instantiate the Unit Under Test (UUT)
 	rotation uut (
@@ -61,14 +61,15 @@ module rotation_tf;
 		// Add stimulus here
 		
 		x = 200;		
-		y = 200;
+		y = 400;
 		angle = 32'b00100000000000000000000000000000;
 		
 		#24
-		x = 150;
-		y = 150;
+		x = 500;
+		y = 300;
 		angle = 32'b00100000000000000000000000000000;
-
+		
+		
 	end
       
 endmodule

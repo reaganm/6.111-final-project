@@ -30,11 +30,11 @@ module rotation(
 	 parameter XSIZE = 12;
 	 parameter YSIZE = 12;
 	 
-	 wire [31:0] atan [0:12] ;
-	 wire [9:0] m;
-	 wire [9:0] n;
-	 wire [31:0] x_rot_large;
-	 wire [31:0] y_rot_large;
+	 wire signed [31:0] atan [0:12] ;
+	 wire signed [9:0] m;
+	 wire signed [10:0] n;
+	 wire signed [31:0] x_rot_large;
+	 wire signed [31:0] y_rot_large;
 	 
 	 //Want a high-precision table of arctan values; however, since our maximum iteration is 11, 
 	 //our table needs only 11 entires.  If we wanted more precise x/y values table would be larger.	 
@@ -59,8 +59,8 @@ module rotation(
 	 	 
 	 always@(posedge clk) begin
 		// Initialize x_reg and y_reg		
-		x_reg[0] <= x;
-		y_reg[0] <= y;
+		x_reg[0] <= x - 400;
+		y_reg[0] <= 300 - y;
 		z_reg[0] <= angle;
 		
 	end
@@ -93,7 +93,7 @@ module rotation(
 	assign x_rot_large = x_reg[XSIZE -1] * m / n;
 	assign y_rot_large = y_reg[YSIZE -1] * m / n;
 	
-	assign x_rot = x_rot_large[11:0];
-	assign y_rot = y_rot_large[10:0];
+	assign x_rot = {x_rot_large[31], x_rot_large[10:0]} + 400;
+	assign y_rot = y_rot_large[31]? {y_rot_large[31], y_rot_large[9:0]}+300: 300-{y_rot_large[31], y_rot_large[9:0]};
 	
 endmodule

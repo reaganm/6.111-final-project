@@ -310,15 +310,15 @@ module visual_6111(beep, audio_reset_b,
 /**********/
 	/*
    assign ram1_data = 36'hZ; 
-   assign ram1_address = 19'h0;
+   assign ram1_address = 19'h0;*/
    assign ram1_adv_ld = 1'b0;
-   assign ram1_clk = 1'b0;
+   //assign ram1_clk = 1'b0;
    
    //These values has to be set to 0 like ram0 if ram1 is used.
-   assign ram1_cen_b = 1'b1; */
+   //assign ram1_cen_b = 1'b1; 
    assign ram1_ce_b = 1'b1;
    assign ram1_oe_b = 1'b1;
-   assign ram1_we_b = 1'b1;
+   //assign ram1_we_b = 1'b1;
    assign ram1_bwe_b = 4'hF;
 
    // clock_feedback_out will be assigned by ramclock
@@ -414,7 +414,7 @@ module visual_6111(beep, audio_reset_b,
    // synthesis attribute CLKIN_PERIOD of vclk1 is 37
    BUFG vclk2(.O(clock_40mhz),.I(clock_40mhz_unbuf));
 
-   wire clk = clock_40mhz;
+   //wire clk = clock_40mhz;
 
 	wire locked;
 	//assign clock_feedback_out = 0; // gph 2011-Nov-10
@@ -453,88 +453,61 @@ module visual_6111(beep, audio_reset_b,
    // wire up to ZBT ram
 
    wire [35:0] vram_write_data;
-   wire [35:0] vram_read_data;
-   wire [18:0] vram_addr;
-   wire        vram_we;
+   wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
+   wire [18:0] vram_addr, vram0_addr, vram1_addr;
+   wire        vram_we, vram0_we, vram1_we;
 
    wire ram0_clk_not_used;
-   zbt_6111 zbt1(clk, 1'b1, vram_we, vram_addr,
-		   vram_write_data, vram_read_data,
+   zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
+		   vram_write_data, vram0_read_data,
 		   ram0_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
 		   ram0_we_b, ram0_address, ram0_data, ram0_cen_b);
-
+			
+	wire ram1_clk_not_used;
+   zbt_6111 zbt1(clk, 1'b1, vram1_we, vram1_addr,
+		   vram_write_data, vram1_read_data,
+		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
+	
+	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
+	assign vram_read_data_render = currentram ? vram0_read_data : vram1_read_data;
    // generate pixel value from reading ZBT memory
-   wire [7:0] 	vr_pixel;
+   wire [15:0] 	vr_pixel;
    wire [18:0] 	vram_addr1;
 
    vram_display vd1(reset,clk,hcount,vcount,vr_pixel,
-		    vram_addr1,vram_read_data);
-
-   // ADV7185 NTSC decoder interface code
-   // adv7185 initialization module
-   adv7185init adv7185(.reset(reset), .clock_27mhz(clock_27mhz), 
-		       .source(1'b0), .tv_in_reset_b(tv_in_reset_b), 
-		       .tv_in_i2c_clock(tv_in_i2c_clock), 
-		       .tv_in_i2c_data(tv_in_i2c_data));
-
-   wire [29:0] ycrcb;	// video data (luminance, chrominance)
-   wire [2:0] fvh;	// sync for field, vertical, horizontal
-   wire       dv;	// data valid
-   
-   ntsc_decode decode (.clk(tv_in_line_clock1), .reset(reset),
-		       .tv_in_ycrcb(tv_in_ycrcb[19:10]), 
-		       .ycrcb(ycrcb), .f(fvh[2]),
-		       .v(fvh[1]), .h(fvh[0]), .data_valid(dv));
-
-   // code to write NTSC data to video memory
-
-   wire [18:0] ntsc_addr;
-   wire [35:0] ntsc_data;
-   wire        ntsc_we;
-   ntsc_to_zbt n2z (clk, tv_in_line_clock1, fvh, dv, ycrcb[29:22],
-		    ntsc_addr, ntsc_data, ntsc_we, switch[6]);
+		    vram_addr1,vram_read_data);   
 
    // code to write pattern to ZBT memory
-   reg [31:0] 	count;
-   always @(posedge clk) count <= reset ? 0 : count + 1;
+   
+	wire [18:0] vram_addr2 = (x <800) ? {y[9:0], x[9:2]} : 19'b1;
+   wire 	my_we = (x[1:0] == 2'd3);
+	
+   wire [18:0] 	write_addr = vram_addr2;	
 
-   wire [18:0] 	vram_addr2 = count[0+18:0];
-   wire [35:0] 	vpat = ( switch[1] ? {4{count[3+3:3],4'b0}}
-			 : {4{count[3+4:4],4'b0}} );
+	assign 	vram0_addr = currentram ? write_addr : vram_addr1;
+   assign 	vram0_we = currentram ? we_render : 0;
 
-   // mux selecting read/write to memory based on which write-enable is chosen
-
-   wire 	sw_ntsc = ~switch[7];
-   wire 	my_we = sw_ntsc ? (hcount[1:0]==2'd2) : blank;
-   wire [18:0] 	write_addr = sw_ntsc ? ntsc_addr : vram_addr2;
-   wire [35:0] 	write_data = sw_ntsc ? ntsc_data : vpat;
-
-//   wire 	write_enable = sw_ntsc ? (my_we & ntsc_we) : my_we;
-//   assign 	vram_addr = write_enable ? write_addr : vram_addr1;
-//   assign 	vram_we = write_enable;
-
-   assign 	vram_addr = my_we ? write_addr : vram_addr1;
-   assign 	vram_we = my_we;
-   assign 	vram_write_data = write_data;
-
+   assign 	vram1_addr = ~currentram ? write_addr : vram_addr1;
+   assign 	vram1_we = currentram ? we_render : 0;
+   
    // select output pixel data
 
-   reg [7:0] 	pixel;
+   reg [15:0] pixel;
    reg 	b,hs,vs;
    
    always @(posedge clk)
-     begin
-	pixel <= switch[0] ? {hcount[8:6],5'b0} : vr_pixel;
-	b <= blank;
-	hs <= hsync;
-	vs <= vsync;
+     begin	
+		b <= blank;
+		hs <= hsync;
+		vs <= vsync;
      end
 
    // VGA Output.  In order to meet the setup and hold times of the
    // AD7125, we send it ~clk.
-   assign vga_out_red = pixel;
-   assign vga_out_green = pixel;
-   assign vga_out_blue = pixel;
+   assign vga_out_red = pixel[15:11];
+   assign vga_out_green = pixel[10:5];
+   assign vga_out_blue = pixel[4:0];
    assign vga_out_sync_b = 1'b1;    // not used
    assign vga_out_pixel_clock = ~clk;
    assign vga_out_blank_b = ~b;
@@ -546,8 +519,8 @@ module visual_6111(beep, audio_reset_b,
    assign led = ~{vram_addr[18:13],reset,switch[0]};
 
    always @(posedge clk)
-     // dispdata <= {vram_read_data,9'b0,vram_addr};
-     dispdata <= {ntsc_data,9'b0,ntsc_addr};
+      dispdata <= {vram_read_data,9'b0,vram_addr};
+     //dispdata <= {ntsc_data,9'b0,ntsc_addr};
 
 endmodule
 /*
@@ -690,7 +663,7 @@ module vram_display(reset,clk,hcount,vcount,vr_pixel,
    input reset, clk;
    input [10:0] hcount;
    input [9:0] 	vcount;
-   output [7:0] vr_pixel;
+   output [15:0] vr_pixel;
    output [18:0] vram_addr;
    input [35:0]  vram_read_data;
 
@@ -701,7 +674,7 @@ module vram_display(reset,clk,hcount,vcount,vr_pixel,
    wire [18:0] 	 vram_addr = {1'b0, vcount_f, hcount_f[9:2]};
 
    wire [1:0] 	 hc4 = hcount[1:0];
-   reg [7:0] 	 vr_pixel;
+   reg [15:0] 	 vr_pixel;
    reg [35:0] 	 vr_data_latched;
    reg [35:0] 	 last_vr_data;
 
@@ -711,14 +684,9 @@ module vram_display(reset,clk,hcount,vcount,vr_pixel,
    always @(posedge clk)
      vr_data_latched <= (hc4==2'd1) ? vram_read_data : vr_data_latched;
 
-   always @(*)		// each 36-bit word from RAM is decoded to 4 bytes
-     case (hc4)
-       2'd3: vr_pixel = last_vr_data[7:0];
-       2'd2: vr_pixel = last_vr_data[7+8:0+8];
-       2'd1: vr_pixel = last_vr_data[7+16:0+16];
-       2'd0: vr_pixel = last_vr_data[7+24:0+24];
-     endcase
-
+   always @(*)		// each 36-bit word from RAM is decoded to 4 bytes     
+     vr_pixel = last_vr_data[15:0];
+		 
 endmodule // vram_display
 
 /////////////////////////////////////////////////////////////////////////////

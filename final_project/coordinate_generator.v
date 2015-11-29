@@ -24,8 +24,8 @@ module coordinate_generator
 	(input done,
     input clk,
     input reset,
-    output [10:0] x, 
-	 output [9:0] y);
+    output [11:0] x, 
+	 output [11:0] y);
 	 
 	 // counts from 0 to (800,600)
 	 always@(posedge clk) begin
