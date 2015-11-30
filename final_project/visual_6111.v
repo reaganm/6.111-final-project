@@ -466,6 +466,8 @@ module visual_6111(beep, audio_reset_b,
 	wire [31:0] angle;
 	wire [11:0] x_rot;
 	wire [10:0] y_rot;
+	wire [11:0] x_trans;
+	wire [10:0] y_trans;
 	
 	// generate pixel value from reading ZBT memory
    wire [15:0] 	vr_pixel;
@@ -473,22 +475,29 @@ module visual_6111(beep, audio_reset_b,
 	wire [15:0] 	init_pixel_1;
    wire [18:0] 	vram_addr1;
 	
-	assign tempo = 0;
+	assign tempo = 100;
+	
 	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
-	translation t1(.clk(clk), .reset(reset), .dist(4), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
-			.x_trans(x_rot), .y_trans(y_rot));
+	
+	wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
+   wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	
+	translation t1(.clk(clk), .reset(reset), .dist(10), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_trans(x_trans), .y_trans(y_trans));
 			
+	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount_f[10:0]}), .y({2'b0, vcount_f[9:0]}),
+			.x_rot(x_rot), .y_rot(y_rot));
 	
 	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
 	
-	wire [18:0] vram_addr2 = {x_rot[10:0] + y_rot[9:0]*800};  	
+	wire [18:0] vram_addr2 = {x_trans[10:0] + y_trans[9:0]*800};  	
    wire [18:0] write_addr = vram_addr2;
 	
 	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
-	assign vram0_we = currentram ? we_render : 0;
+	assign vram0_we = currentram ? 1 : we_render;
 	
 	assign vram1_addr = ~currentram ? write_addr : vram_addr1;	
-	assign vram1_we = ~currentram ? we_render : 0;
+	assign vram1_we = currentram ? we_render : 1;
 	
 	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
 	
@@ -505,8 +514,7 @@ module visual_6111(beep, audio_reset_b,
 		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
 		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
 	
-	assign vram_write_data = ~init ? init_pixel : vram_write_data1;
-	assign vram_write_data1 = vram_read_data;
+	assign vram_write_data = ~init ? init_pixel : vram_read_data;	
 	
 	image_init  #(.COLOR(16'h00FF)) im0(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
 	//image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel_2));
@@ -515,7 +523,8 @@ module visual_6111(beep, audio_reset_b,
 
 		
 	always@(posedge clk) begin
-		we_render <= ~init ? 1 : 0;		
+		we_render <= ~init ? 1 : 0;	
+		//we_render <= 1;
 	end
 	
 	reg [4:0] count= 5'b1110;
@@ -525,6 +534,7 @@ module visual_6111(beep, audio_reset_b,
 			currentram <= 0; end
 		else begin
 			init <= 1;
+			//currentram <= ~currentram;
 			if (count< 30) count <= count +1;
 			else if (count == 30) begin
 				currentram <= ~currentram; 

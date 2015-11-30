@@ -30,13 +30,13 @@ module translation(
 	
 	reg signed [11:0] x_reg;
 	reg signed [11:0] y_reg;
-	
+		
 	always@(posedge clk) begin
 		x_reg <= x +dist;
 		y_reg <= y +dist;
 	end
 
-	assign x_trans = x_reg[11:0];
-	assign y_trans = y_trans[10:0];
+	assign x_trans = x_reg;
+	assign y_trans = y_reg[10:0];
 	
 endmodule
