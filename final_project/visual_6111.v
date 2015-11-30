@@ -310,17 +310,29 @@ module visual_6111(beep, audio_reset_b,
 /**********/
 	/*
    assign ram1_data = 36'hZ; 
-   assign ram1_address = 19'h0;*/
+   assign ram1_address = 19'h0;*//*
    assign ram1_adv_ld = 1'b0;
    //assign ram1_clk = 1'b0;
    
    //These values has to be set to 0 like ram0 if ram1 is used.
    //assign ram1_cen_b = 1'b1; 
+   assign ram1_ce_b = 1'b0;
+   assign ram1_oe_b = 1'b0;
+   //assign ram1_we_b = 1'b1;
+   assign ram1_bwe_b = 4'h0;*/
+
+// for test w/ one zbt
+	assign ram1_data = 36'hZ; 
+   assign ram1_address = 19'h0;
+   assign ram1_adv_ld = 1'b0;
+   assign ram1_clk = 1'b0;
+   
+   //These values has to be set to 0 like ram0 if ram1 is used.
+   assign ram1_cen_b = 1'b1;
    assign ram1_ce_b = 1'b1;
    assign ram1_oe_b = 1'b1;
-   //assign ram1_we_b = 1'b1;
+   assign ram1_we_b = 1'b1;
    assign ram1_bwe_b = 4'hF;
-
    // clock_feedback_out will be assigned by ramclock
    // assign clock_feedback_out = 1'b0;  //2011-Nov-10
    // clock_feedback_in is an input
@@ -376,16 +388,7 @@ module visual_6111(beep, audio_reset_b,
    assign systemace_oe_b = 1'b1;
    // systemace_irq and systemace_mpbrdy are inputs
 
-   // Logic Analyzer
-   assign analyzer1_data = 16'h0;
-   assign analyzer1_clock = 1'b1;
-   assign analyzer2_data = 16'h0;
-   assign analyzer2_clock = 1'b1;
-   assign analyzer3_data = 16'h0;
-   assign analyzer3_clock = 1'b1;
-   assign analyzer4_data = 16'h0;
-   assign analyzer4_clock = 1'b1;
-			    
+   
    ////////////////////////////////////////////////////////////////////////////
    // Demonstration of ZBT RAM as video memory
 
@@ -421,7 +424,7 @@ module visual_6111(beep, audio_reset_b,
    
    ramclock rc(.ref_clock(clock_40mhz), .fpga_clock(clk),
 					.ram0_clock(ram0_clk), 
-					.ram1_clock(ram1_clk),   //uncomment if ram1 is used
+					//.ram1_clock(ram1_clk),   //uncomment if ram1 is used
 					.clock_feedback_in(clock_feedback_in),
 					.clock_feedback_out(clock_feedback_out), .locked(locked));
 
@@ -444,56 +447,63 @@ module visual_6111(beep, audio_reset_b,
 			  disp_blank, disp_clock, disp_rs, disp_ce_b,
 			  disp_reset_b, disp_data_out);
 
-   // generate basic XVGA video signals
+   // generate basic SVGA video signals
    wire [10:0] hcount;
    wire [9:0]  vcount;
    wire hsync,vsync,blank;
    svga svga1(clk,hcount,vcount,hsync,vsync,blank);
 
    // wire up to ZBT ram
-
-   wire [35:0] vram_write_data;
+	wire [35:0] vram_write_data, vram_write_data_init, vram_write_data1;
    wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
    wire [18:0] vram_addr, vram0_addr, vram1_addr;
    wire        vram_we, vram0_we, vram1_we;
-
+   reg we_render;
+   reg currentram;
+	reg init;
    wire ram0_clk_not_used;
+	wire [9:0] tempo;
+	wire [31:0] angle;
+	wire [11:0] x_rot;
+	wire [10:0] y_rot;
+	
+	// generate pixel value from reading ZBT memory
+   wire [15:0] 	vr_pixel;
+	wire [15:0] 	init_pixel;
+   wire [18:0] 	vram_addr1;
+	
+	assign tempo = 0;
+	
+	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
+	
+	
+	assign vram0_addr = (~init ? vram_addr_init : vram_addr1);
+	assign vram_read_data = vram0_read_data;
+	assign vram0_we = we_render;
+	
+	
    zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
 		   vram_write_data, vram0_read_data,
 		   ram0_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
 		   ram0_we_b, ram0_address, ram0_data, ram0_cen_b);
-			
-	wire ram1_clk_not_used;
-   zbt_6111 zbt1(clk, 1'b1, vram1_we, vram1_addr,
-		   vram_write_data, vram1_read_data,
-		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
-		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
 	
-	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
-	assign vram_read_data_render = currentram ? vram0_read_data : vram1_read_data;
-   // generate pixel value from reading ZBT memory
-   wire [15:0] 	vr_pixel;
-   wire [18:0] 	vram_addr1;
-
-   vram_display vd1(reset,clk,hcount,vcount,vr_pixel,
-		    vram_addr1,vram_read_data);   
-
-   // code to write pattern to ZBT memory
-   
-	wire [18:0] vram_addr2 = (x <800) ? {y[9:0], x[9:2]} : 19'b1;
-   wire 	my_we = (x[1:0] == 2'd3);
+	assign vram_write_data = ~init ? init_pixel : 0;
 	
-   wire [18:0] 	write_addr = vram_addr2;	
+	image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
+	
+   vram_display vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
+		    vram_addr1,vram_read_data); 
 
-	assign 	vram0_addr = currentram ? write_addr : vram_addr1;
-   assign 	vram0_we = currentram ? we_render : 0;
-
-   assign 	vram1_addr = ~currentram ? write_addr : vram_addr1;
-   assign 	vram1_we = currentram ? we_render : 0;
-   
-   // select output pixel data
-
-   reg [15:0] pixel;
+		
+	always@(posedge clk) begin
+		we_render <= ~init ? 1 : 0;		
+	end
+	
+	always@(posedge vsync) begin
+		if (reset) init <= 0;
+		else init <= 1;
+	end
+	
    reg 	b,hs,vs;
    
    always @(posedge clk)
@@ -501,13 +511,13 @@ module visual_6111(beep, audio_reset_b,
 		b <= blank;
 		hs <= hsync;
 		vs <= vsync;
-     end
-
+   end
+	
    // VGA Output.  In order to meet the setup and hold times of the
    // AD7125, we send it ~clk.
-   assign vga_out_red = pixel[15:11];
-   assign vga_out_green = pixel[10:5];
-   assign vga_out_blue = pixel[4:0];
+   assign vga_out_red = {3'b1,vr_pixel[15:11]};
+   assign vga_out_green = {2'b0, vr_pixel[10:5]};
+   assign vga_out_blue = {3'b1, vr_pixel[4:0]};
    assign vga_out_sync_b = 1'b1;    // not used
    assign vga_out_pixel_clock = ~clk;
    assign vga_out_blank_b = ~b;
@@ -522,6 +532,16 @@ module visual_6111(beep, audio_reset_b,
       dispdata <= {vram_read_data,9'b0,vram_addr};
      //dispdata <= {ntsc_data,9'b0,ntsc_addr};
 
+	// Logic Analyzer
+   assign analyzer1_data = vram0_addr[18:10];
+   assign analyzer1_clock = clk;
+   assign analyzer2_data = vram0_addr[9:0];
+   assign analyzer2_clock = clk;
+   assign analyzer3_data = vram_write_data;
+   assign analyzer3_clock = clk;
+   assign analyzer4_data = vram0_we;
+   assign analyzer4_clock = clk;
+			    
 endmodule
 /*
 ///////////////////////////////////////////////////////////////////////////////
@@ -657,21 +677,22 @@ endmodule
 //    instead to call data from ZBT.
 
 
-module vram_display(reset,clk,hcount,vcount,vr_pixel,
+module vram_display(reset,clk, init, hcount,vcount,vr_pixel,
 		    vram_addr,vram_read_data);
 
    input reset, clk;
    input [10:0] hcount;
    input [9:0] 	vcount;
+	input init;
    output [15:0] vr_pixel;
-   output [18:0] vram_addr;
+   output [20:0] vram_addr;
    input [35:0]  vram_read_data;
-
-   //forecast hcount & vcount 13 clock cycles ahead to get data from ZBT
-   wire [10:0] hcount_f = (hcount >= 1043) ? (hcount - 1043) : (hcount + 13);
-   wire [9:0] vcount_f = (hcount >= 1043) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	
+	//forecast hcount & vcount 2 clock cycles ahead to get data from ZBT
+   wire [10:0] hcount_f = (hcount >= 1054) ? (hcount - 1054) : (hcount + 2);
+   wire [9:0] vcount_f = (hcount >= 1054) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
       
-   wire [20:0] 	 vram_addr = {vcount_f[9:0], hcount_f[10:0]};
+   wire [18:0] 	 vram_addr =  {hcount_f[10:0] + vcount_f[9:0]*800};
 
    wire [1:0] 	 hc4 = hcount[1:0];
    reg [15:0] 	 vr_pixel;
@@ -679,14 +700,9 @@ module vram_display(reset,clk,hcount,vcount,vr_pixel,
    reg [35:0] 	 last_vr_data;
 
    always @(posedge clk)
-     last_vr_data <= (hc4==2'd3) ? vr_data_latched : last_vr_data;
+     vr_pixel <= vram_read_data[15:0];   
 
-   always @(posedge clk)
-     vr_data_latched <= (hc4==2'd1) ? vram_read_data : vr_data_latched;
-
-   always @(*)		// each 36-bit word from RAM is decoded to 4 bytes     
-     vr_pixel = last_vr_data[15:0];
-		 
+   	 
 endmodule // vram_display
 
 /////////////////////////////////////////////////////////////////////////////

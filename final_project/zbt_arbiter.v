@@ -27,21 +27,29 @@ module zbt_arbiter(
    input signed [10:0] y_rot,
 	input [10:0] hcount,
 	input [9:0] vcount,	
-	output[15:0] pixel, 
-	output currentram
+	output[15:0] pixel
   );
-  
-   parameter INITIALIZING = 2'b0;
-	parameter READING = 2'b01;
-	parameter HOLDING = 2'b10;
-	
-	
-   wire [35:0] vram_write_data;
-   wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
-   wire [20:0] vram_addr, vram0_addr, vram1_addr;
-   wire        vram_we, vram0_we, vram1_we;
+  	
 
+   wire [35:0] vram_write_data, vram_write_data_init, vram_write_data1;
+   wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
+   wire [18:0] vram_addr, vram0_addr, vram1_addr;
+   wire        vram_we, vram0_we, vram1_we;
+   reg we_render;
+   reg currentram;
+	reg init;
    wire ram0_clk_not_used;
+	wire [9:0] tempo;
+	wire [31:0] angle;
+	wire [11:0] x_rot;
+	wire [10:0] y_rot;
+	
+	assign tempo = 0;
+	
+	
+	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
+	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_rot(x_rot), .y_rot(y_rot));
 	
    zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
 		   vram_write_data, vram0_read_data,
@@ -58,30 +66,45 @@ module zbt_arbiter(
 	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
 	assign vram_read_data_render = currentram ? vram0_read_data : vram1_read_data;
 	
-	delayN #(.NDELAY(11)) vram_delay(.in(vram_read_data), .out(vram_write_data));
+	delayN #(.NDELAY(9)) vram_delay(.in(vram_read_data), .out(vram_write_data1));
 	
    // generate pixel value from reading ZBT memory
    wire [15:0] 	vr_pixel;
-   wire [20:0] 	vram_addr1;
-
-   vram_display vd1(reset,clk,hcount,vcount,vr_pixel,
+	wire [15:0] 	init_pixel;
+   wire [18:0] 	vram_addr1;
+	
+	image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
+	
+   vram_display vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
 		    vram_addr1,vram_read_data);   
 
+	assign vram_write_data = ~init ? init_pixel : vram_write_data1;
+	
    // code to write pattern to ZBT memory
    
-	wire [20:0] vram_addr2 = (x_rot > -1 && y_rot > -1 && x_rot < 800 && y_rot < 600) ? {y_rot[9:0], x_rot[10:0]} : 21'b1;
+	wire [18:0] vram_addr2 = (x_rot > -1 && y_rot > -1 && x_rot < 800 && y_rot < 600) ? {x_rot[10:0] + y_rot[9:0]*800} : 19'b1;
    	
-   wire [20:0] write_addr = vram_addr2;	
+   wire [18:0] write_addr = vram_addr2;	
 
 	assign 	vram0_addr = currentram ? write_addr : vram_addr1;
-   assign 	vram0_we = currentram ? we_render : 0;
+	//assign 	vram0_we = currentram ? we_render : (~init ? 1: 0);
+	assign 	vram0_we = currentram ? we_render : 0;
 
    assign 	vram1_addr = ~currentram ? write_addr : vram_addr1;
-   assign 	vram1_we = ~currentram ? we_render : 0;
+	//assign 	vram1_we = ~currentram ? we_render : (~init ? 1: 0);
+	assign 	vram1_we = ~currentram ? we_render : 0;
 	
-	always@(posedge vclock) begin
-		we_render <= 1;
-		if (x == 1055 && y == 627) currentram <= ~current_ram;
+	always@(posedge clk) begin
+		if(reset) init <= 0;
+		else begin
+			we_render <= ~init ? 0: 1;
+			init <= 1;
+			//if (hcount == 1055 && vcount == 627) currentram <= ~currentram;
+		end
+	end
+	
+	always@(posedge vsync) begin
+		currentram <= ~currentram;
 	end
 	
 endmodule
