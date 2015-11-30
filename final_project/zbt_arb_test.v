@@ -41,8 +41,8 @@ module zbt_arb_test(
    wire ram0_clk_not_used;
 	wire [9:0] tempo;
 	wire [31:0] angle;
-	wire [11:0] x_rot;
-	wire [10:0] y_rot;
+	//wire [11:0] x_rot;
+	//wire [10:0] y_rot;
 	
 	// generate pixel value from reading ZBT memory
    wire [15:0] 	vr_pixel;
@@ -80,4 +80,6 @@ module zbt_arb_test(
 		if (reset) init <= 0;
 		else init <= 1;
 	end
+	
+	
 endmodule
