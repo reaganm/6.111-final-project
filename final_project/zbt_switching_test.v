@@ -186,3 +186,130 @@ endmodule
 			currentram <= ~currentram; end
 	end
 */
+/* Working translation
+
+coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
+	
+	//wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
+   //wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	
+	translation t1(.clk(clk), .reset(reset), .dist(10), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_trans(x_trans), .y_trans(y_trans));
+			
+	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_rot(x_rot_delayed), .y_rot(y_rot_delayed));
+			
+	delayN #(.NDELAY(11)) x_delay(.in(x_rot_delayed), .out(x_rot));	
+	delayN #(.NDELAY(11)) y_delay(.in(y_rot_delayed), .out(y_rot));	
+	
+	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
+	
+	wire [18:0] vram_addr2 = {x_trans[10:0] + y_trans[9:0]*800};  	
+   wire [18:0] write_addr = vram_addr2;
+	
+	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
+	assign vram0_we = currentram ? 1 : we_render;
+	
+	assign vram1_addr = ~currentram ? write_addr : vram_addr1;	
+	assign vram1_we = currentram ? we_render : 1;
+	
+	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
+	
+	
+   zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
+		   vram_write_data, vram0_read_data,
+		   ram0_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram0_we_b, ram0_address, ram0_data, ram0_cen_b);
+			
+	wire ram1_clk_not_used;
+	
+   zbt_6111 zbt1(clk, 1'b1, vram1_we, vram1_addr,
+		   vram_write_data, vram1_read_data,
+		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
+	
+	assign vram_write_data = ~init ? init_pixel : vram_read_data;	
+	
+	image_init  #(.COLOR(16'h00FF)) im0(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
+	//image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel_2));
+   vram_display vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
+		    vram_addr1,vram_read_data); 
+
+		
+	always@(posedge clk) begin
+		we_render <= ~init ? 1 : 0;	
+		//we_render <= 1;
+	end
+	
+	reg [4:0] count= 5'b1110;
+	always@(posedge vsync) begin
+		if (reset)  begin 
+			init <= 0;
+			currentram <= 0; end
+		else begin
+			init <= 1;
+			//currentram <= ~currentram;
+			if (count< 30) count <= count +1;
+			else if (count == 30) begin
+				currentram <= ~currentram; 
+				count<= 0; end
+		end
+	end
+*/
+/* Now not moving
+wire translation;
+	
+	assign tempo = 0;
+	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
+	
+	//wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
+   //wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	
+	translation t1(.clk(clk), .reset(reset), .dist(5), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_trans(x_trans), .y_trans(y_trans));
+			
+	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+			.x_rot(x_rot), .y_rot(y_rot));
+			
+	
+	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
+	
+	assign translation = 1;
+	
+	wire [18:0] vram_addr_rot = (x_rot > -1 && y_rot > -1 && x_rot < 800 && y_rot < 600) ? {x_rot[10:0] + y_rot[9:0]*800} : 19'b1;  	
+   wire [18:0] vram_addr_trans = {x_trans[10:0] + y_trans[9:0]*800};
+	
+	assign vram_addr2 = vram_addr_trans;
+	wire [18:0] write_addr = vram_addr2;
+	
+	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
+	assign vram0_we = currentram ? 1 : we_render;
+	
+	assign vram1_addr = ~currentram ? write_addr : vram_addr1;	
+	assign vram1_we = currentram ? we_render : 1;
+	
+	assign vram_read_data = (currentram ? vram1_read_data : vram0_read_data);
+	
+	//delayN #(.NDELAY(11)) vram_delay(.in(vram_read_data), .out(vram_write_data1));	
+	assign vram_write_data1 = vram_read_data;
+	
+   zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
+		   vram_write_data, vram0_read_data,
+		   ram0_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram0_we_b, ram0_address, ram0_data, ram0_cen_b);
+			
+	wire ram1_clk_not_used;
+	
+   zbt_6111 zbt1(clk, 1'b1, vram1_we, vram1_addr,
+		   vram_write_data, vram1_read_data,
+		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
+	
+	assign vram_write_data = ~init ? init_pixel : vram_read_data ;	
+	
+	image_init  #(.COLOR(16'h00FF)) im0(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
+	//image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel_2));
+   vram_display vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
+		    vram_addr1,vram_read_data); 
+
+*/
