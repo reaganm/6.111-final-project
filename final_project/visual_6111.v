@@ -483,8 +483,8 @@ module visual_6111(beep, audio_reset_b,
 	assign tempo = 160;
 	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
 	
-	wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
-   wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	wire [10:0] hcount_f = (hcount >= 1045) ? (hcount - 1045) : (hcount + 11);
+   wire [9:0] vcount_f = (hcount >= 1045) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
 	
 	translation t1(.clk(clk), .reset(reset), .dist(10), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
 			.x_trans(x_trans), .y_trans(y_trans));
