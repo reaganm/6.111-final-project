@@ -456,11 +456,12 @@ module visual_6111(beep, audio_reset_b,
    // wire up to ZBT ram
 	wire [35:0] vram_write_data, vram_write_data_init, vram_write_data1;
    wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
-   wire [18:0] vram_addr, vram0_addr, vram1_addr;
-   wire        vram_we, vram0_we, vram1_we;
+   wire [18:0] vram_addr, vram0_addr, vram1_addr, vram_addr2;
+	wire        vram_we, vram0_we, vram1_we;
    reg we_render;
    reg currentram;
 	reg init;
+	reg [2:0] addr_count;
    wire ram0_clk_not_used;
 	wire [9:0] tempo;
 	wire [31:0] angle;
@@ -479,21 +480,29 @@ module visual_6111(beep, audio_reset_b,
 	
 	wire translation;
 	
-	assign tempo = 60;
+	assign tempo = 160;
 	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
 	
-	//wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
-   //wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
+	wire [10:0] hcount_f = (hcount >= 1042) ? (hcount - 1042) : (hcount + 14);
+   wire [9:0] vcount_f = (hcount >= 1042) ? ((vcount == 627) ? 0 : vcount + 1) : vcount;
 	
 	translation t1(.clk(clk), .reset(reset), .dist(10), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
 			.x_trans(x_trans), .y_trans(y_trans));
 			
-	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount[10:0]}), .y({2'b0, vcount[9:0]}),
+	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount_f[10:0]}), .y({2'b0, vcount_f[9:0]}),
 			.x_rot(x_rot), .y_rot(y_rot));
+	
 		
 	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
 	
-	wire [18:0] vram_addr2 = {x_rot[10:0] + y_rot[9:0]*800};  	
+	wire [18:0] vram_addrA = {x_rot[10:0] + y_rot[9:0]*800};  
+	wire [18:0] vram_addrB = {x_rot[10:0] + 1 + y_rot[9:0]*800};
+	wire [18:0] vram_addrC = {x_rot[10:0] + (y_rot[9:0]+1)*800};
+	wire [18:0] vram_addrD = {x_rot[10:0] + 1 + (y_rot[9:0]+1)*800};
+	
+	mux4 addr_mux(.clk(clk), .sel(addr_count), .A(vram_addrA), .B(vram_addrB),
+			.C(vram_addrC), .D(vram_addrD), .Y(vram_addr2));	
+	
    wire [18:0] write_addr = vram_addr2;
 	
 	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
@@ -504,8 +513,8 @@ module visual_6111(beep, audio_reset_b,
 	
 	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
 	
-	delayN #(.NDELAY(11)) vram_delay(.in(vram_read_data), .out(vram_write_data1));	
-	//assign vram_write_data1 = vram_read_data;
+	//delayN #(.NDELAY(11)) vram_delay(.in(vram_read_data), .out(vram_write_data1));	
+	assign vram_write_data1 = vram_read_data;
 	
    zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
 		   vram_write_data, vram0_read_data,
@@ -536,15 +545,18 @@ module visual_6111(beep, audio_reset_b,
 	always@(posedge vsync) begin
 		if (reset)  begin 
 			init <= 0;
-			currentram <= 0; end
+			currentram <= 0; 
+			addr_count <= 0; end
 		else begin
 			init <= 1;
 			//currentram <= ~currentram;
-			if (count< 30) count <= count +1;
-			else if (count == 30) begin
+			if (count< 28) count <= count +1;			
+			else if (count == 28) begin
 				currentram <= ~currentram; 
-				count<= 0; end
-		end
+				count<= 0; 
+			end
+			addr_count <= addr_count+1;
+		end		
 	end
 	
    reg 	b,hs,vs;
