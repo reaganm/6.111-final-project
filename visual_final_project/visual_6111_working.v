@@ -465,7 +465,7 @@ module visual_6111_working(beep, audio_reset_b,
 	reg init;
 	reg [2:0] addr_count;
    wire ram0_clk_not_used;
-	wire [9:0] tempo;
+	wire [7:0] tempo;
 	wire [31:0] angle;
 	wire [11:0] x_rot;
 	wire [10:0] y_rot;	
@@ -475,50 +475,21 @@ module visual_6111_working(beep, audio_reset_b,
 	wire [10:0] y_in;
 	
 	// generate pixel value from reading ZBT memory
-   wire [15:0] 	vr_pixel;
-	wire [15:0] 	init_pixel;
-	wire [15:0] 	init_pixel_1;
+   wire [23:0] 	vr_pixel;
+	wire [23:0] 	circle_pixel;
+	
    wire [18:0] 	vram_addr1;
 	wire [23:0] pixel_out;
+		
+	reg circle = 0;
 	
-	wire translation;
-	
-	assign tempo = 60;
-	coordinate_controller c1(.clk(clk), .tempo(tempo), .angle(angle));
-	
-	wire [10:0] hcount_f = (hcount >= 1041) ? (hcount - 1041) : (hcount + 15);
-   wire [9:0] vcount_f = (hcount >= 1041) ? ((vcount == 627) ? 0 : vcount +1) : vcount;
-	
-	translation t1(.clk(clk), .reset(reset), .dist(10), .x({1'b0, hcount_f[10:0]}), .y({2'b0, vcount_f[9:0]}),
-			.x_trans(x_trans), .y_trans(y_trans));
-			
-	rotation r1(.clk(clk), .reset(reset), .angle(angle), .x({1'b0, hcount_f[10:0]}), .y({2'b0, vcount_f[9:0]}),
-			.x_rot(x_rot), .y_rot(y_rot));
-	
-	//wire [18:0] vram_addr_buff = (x_rot[11] | y_rot[10] | x_rot>800 | y_rot >600) ? 19'b1 :{x_rot[10:0] + y_rot[9:0]*800};
+	assign tempo = 250;	
 		
 	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
 	
-	wire [18:0] vram_addrA = {x_rot[10:0] + y_rot[9:0]*800};  
-	wire [18:0] vram_addrB = {x_rot[10:0] - 1 + y_rot[9:0]*800};
-	wire [18:0] vram_addrC = {x_rot[10:0] + (y_rot[9:0]-1)*800};
-	wire [18:0] vram_addrD = {x_rot[10:0] - 1 + (y_rot[9:0]-1)*800};
+	assign vram_addr0 = currentram ? vram_addr2 : vram_addr3;	
 	
-	wire [18:0] vram_addrA1 = {x_rot[10:0] + y_rot[9:0]*800};  
-	wire [18:0] vram_addrB1 = {x_rot[10:0] + 1 + y_rot[9:0]*800};
-	wire [18:0] vram_addrC1 = {x_rot[10:0] + (y_rot[9:0]+1)*800};
-	wire [18:0] vram_addrD1 = {x_rot[10:0] + 1 + (y_rot[9:0]+1)*800};
-	
-	wire [18:0] vram_addrTrans = {x_trans[10:0] + y_trans[9:0]*800};
-	
-	mux4 addr_mux(.clk(clk), .sel(addr_count), .A(vram_addrA), .B(vram_addrB),
-			.C(vram_addrC), .D(vram_addrD), .Y(vram_addr2));	
-	
-	mux4 addr_mux1(.clk(clk), .sel(addr_count), .A(vram_addrA1), .B(vram_addrB1),
-			.C(vram_addrC1), .D(vram_addrD1), .Y(vram_addr3));
-			
-	assign vram_addr0 = currentram ? vram_addr2 : vram_addr3;		
-   wire [18:0] write_addr = vram_addrA;
+   wire [18:0] write_addr = circle ? vram_addr_init : vram_addr0;
 	
 	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
 	assign vram0_we = currentram ? 1 : we_render;
@@ -528,7 +499,6 @@ module visual_6111_working(beep, audio_reset_b,
 	
 	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
 	
-	//delayN #(.NDELAY(11)) vram_delay(.in(vram_read_data), .out(vram_write_data1));	
 	assign vram_write_data1 = vram_read_data;
 	
    zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
@@ -542,26 +512,30 @@ module visual_6111_working(beep, audio_reset_b,
 		   vram_write_data, vram1_read_data,
 		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
 		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
+			
+	graphics_rotation g1(.clk(clk),.reset(reset), .circle(circle),.addr_count(addr_count), .hcount(hcount), .vcount(vcount),
+			.tempo(tempo), .vram_addr2(vram_addr2), .vram_addr3(vram_addr3));
 	
-	assign vram_write_data = ~init ? init_pixel : vram_write_data1;	
-	
-	image_init  #(.COLOR(16'h00FF)) im0(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel));
-	//image_init im1(.clk(clk), .hcount(hcount), .vcount(vcount), .pixel(init_pixel_2));
-   vram_display1 vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
+	image_init im0(.clk(clk), .tempo(tempo), .circle(circle),.hcount(hcount), .vcount(vcount), .vsync(vsync),.pixel(circle_pixel));
+
+	assign vram_write_data = (circle ? circle_pixel : vram_write_data1);
+			 
+	vram_display1 vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
 		    vram_addr1,vram_read_data); 
 
 	always@(posedge clk) begin
 		we_render <= ~init ? 1 : 0;	
-		//we_render <= 1;
+		
 	end
+	
+	wire [9:0] phase;
 	reg shift = 0;
 	
-	color_shft color(.shft(shift), .vr(vr_pixel), .pixel(pixel_out));
+	color_shft color(.reset(reset), .shft(shift), .vr(vr_pixel), .pixel(pixel_out));
 	
-	//wire [23:0] pixel_delayed;
 		
-	
 	reg [9:0] count= 0;
+	
 	always@(posedge vsync) begin
 		if (reset)  begin 
 			init <= 0;
@@ -570,20 +544,16 @@ module visual_6111_working(beep, audio_reset_b,
 			addr_count <= 0; end
 		else begin
 			init <= 1;
-			//currentram <= ~currentram;
+			currentram <= ~currentram;			
 			if (count< tempo) begin
 				shift <= 0;
 			   count <= count + 1;
-			end
-			if (addr_count == 4) currentram <= ~currentram;			
+			end			
 			if (count == tempo) begin
 				count <= 0;
 				shift <= 1; end
-//			if (count< 28) count <= count +1;			
-//			else if (count == 28) begin
-//				currentram <= ~currentram; 
-//				count<= 0; end*/
-			addr_count <= addr_count+1;		
+			addr_count <= addr_count+1;
+			if (switch[0]) circle <= !circle; 
 		end		
 	end
 	
@@ -598,12 +568,9 @@ module visual_6111_working(beep, audio_reset_b,
 	
    // VGA Output.  In order to meet the setup and hold times of the
    // AD7125, we send it ~clk.
-	assign vga_out_red = (hcount == 450) ? 8'hFF : pixel_out[23:16];
+	assign vga_out_red = pixel_out[23:16];
    assign vga_out_green = pixel_out[15:8];
-   assign vga_out_blue = pixel_out[7:0];/*
-   assign vga_out_red = (hcount == 450 || hcount == 255 || vcount == 375)? 8'hFF: {3'b1,vr_pixel[15:11]};
-   assign vga_out_green = {2'b0, vr_pixel[10:5]};
-   assign vga_out_blue = {3'b1, vr_pixel[4:0]};*/
+   assign vga_out_blue = pixel_out[7:0];
    assign vga_out_sync_b = 1'b1;    // not used
    assign vga_out_pixel_clock = ~clk;
    assign vga_out_blank_b = ~b;
@@ -618,14 +585,14 @@ module visual_6111_working(beep, audio_reset_b,
       dispdata <= 0;
      //dispdata <= {ntsc_data,9'b0,ntsc_addr};
 
-	// Logic Analyzer
-   assign analyzer1_data = vram0_addr[18:10];
+//	// Logic Analyzer
+   assign analyzer1_data = tempo;
    assign analyzer1_clock = clk;
-   assign analyzer2_data = vram0_addr[9:0];
+   assign analyzer2_data = 0;
    assign analyzer2_clock = clk;
-   assign analyzer3_data = vram_write_data;
+   assign analyzer3_data = 0;
    assign analyzer3_clock = clk;
-   assign analyzer4_data = vram0_we;
+   assign analyzer4_data = 0;
    assign analyzer4_clock = clk;
 			    
 endmodule
@@ -762,7 +729,7 @@ module vram_display1(reset,clk, init, hcount,vcount,vr_pixel,
    input [10:0] hcount;
    input [9:0] 	vcount;
 	input init;
-   output [15:0] vr_pixel;
+   output [23:0] vr_pixel;
    output [18:0] vram_addr;
    input [35:0]  vram_read_data;
 	
@@ -773,12 +740,12 @@ module vram_display1(reset,clk, init, hcount,vcount,vr_pixel,
    wire [18:0] 	 vram_addr =  {hcount_f[10:0] + vcount_f[9:0]*800};
 
    wire [1:0] 	 hc4 = hcount[1:0];
-   reg [15:0] 	 vr_pixel;
+   reg [23:0] 	 vr_pixel;
    reg [35:0] 	 vr_data_latched;
    reg [35:0] 	 last_vr_data;
 
    always @(posedge clk)
-     vr_pixel <= vram_read_data[15:0];   
+     vr_pixel <= vram_read_data[23:0];   
 
    	 
 endmodule // vram_display
@@ -901,6 +868,120 @@ module ramclock1(ref_clock, fpga_clock, ram0_clock, ram1_clock,
    
 endmodule
 
+// ZBT arbiter module
+module zbtarbiter(
+	input reset,
+	input clk,
+	input [10:0] hcount,
+	input [9:0] vcount,
+	input vsync,
+	input [7:0] tempo,
+	input phase,
+	output [23:0] pixel
+    );
+
+   
+   // wire up to ZBT ram
+	wire [35:0] vram_write_data, vram_write_data_init, vram_write_data1;
+   wire [35:0] vram0_read_data, vram1_read_data, vram_read_data;
+   wire [18:0] vram_addr, vram0_addr, vram1_addr, vram_addr0, vram_addr3, vram_addr2;
+	wire        vram_we, vram0_we, vram1_we;
+   reg we_render;
+   reg currentram;
+
+	reg init;
+	reg [2:0] addr_count;
+   wire ram0_clk_not_used;	
+	wire [31:0] angle;
+	wire [11:0] x_rot;
+	wire [10:0] y_rot;	
+	wire [11:0] x_trans;
+	wire [10:0] y_trans;
+	wire [11:0] x_in;
+	wire [10:0] y_in;
+	
+	// generate pixel value from reading ZBT memory
+   wire [23:0] 	vr_pixel;
+	wire [23:0] 	circle_pixel;
+	
+   wire [18:0] 	vram_addr1;
+	wire [23:0] pixel_out;
+		
+	reg circle = 1;
+		
+		
+	wire [18:0] vram_addr_init = {hcount[10:0] + vcount[9:0]*800};
+	
+	assign vram_addr0 = currentram ? vram_addr2 : vram_addr3;	
+	
+   wire [18:0] write_addr = circle ? vram_addr_init : vram_addr0;
+	
+	assign vram0_addr = ~init ? vram_addr_init : (currentram ? write_addr: vram_addr1);	
+	assign vram0_we = currentram ? 1 : we_render;
+	
+	assign vram1_addr = ~currentram ? write_addr : vram_addr1;	
+	assign vram1_we = currentram ? we_render : 1;
+	
+	assign vram_read_data = currentram ? vram1_read_data : vram0_read_data;
+	
+	assign vram_write_data1 = vram_read_data;
+	
+   zbt_6111 zbt0(clk, 1'b1, vram0_we, vram0_addr,
+		   vram_write_data, vram0_read_data,
+		   ram0_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram0_we_b, ram0_address, ram0_data, ram0_cen_b);
+			
+	wire ram1_clk_not_used;
+	
+   zbt_6111 zbt1(clk, 1'b1, vram1_we, vram1_addr,
+		   vram_write_data, vram1_read_data,
+		   ram1_clk_not_used,   //to get good timing, don't connect ram_clk to zbt_6111
+		   ram1_we_b, ram1_address, ram1_data, ram1_cen_b);
+			
+	graphics_rotation g1(.clk(clk),.reset(reset), .addr_count(addr_count), .hcount(hcount), .vcount(vcount),
+			.tempo(tempo), .vram_addr2(vram_addr2), .vram_addr3(vram_addr3));
+	
+	image_init im0(.clk(clk), .tempo(tempo),.hcount(hcount), .vcount(vcount), .vsync(vsync),.pixel(circle_pixel));
+
+	assign vram_write_data = (circle ? circle_pixel : vram_write_data1);
+			 
+	vram_display1 vd1(reset,clk, ~init, hcount,vcount,vr_pixel,
+		    vram_addr1,vram_read_data); 
+
+	always@(posedge clk) begin
+		we_render <= ~init ? 1 : 0;	
+		
+	end	
+	
+	reg shift = 0;
+	
+	color_shft color(.reset(reset), .shft(shift), .vr(vr_pixel), .pixel(pixel_out));
+	
+	assign pixel = pixel_out;
+		
+	reg [9:0] count= 0;
+	
+	always@(posedge vsync) begin
+		if (reset)  begin 
+			init <= 0;
+			shift <= 0;
+			currentram <= 0; 
+			addr_count <= 0; end
+		else begin
+			init <= 1;
+			currentram <= ~currentram;			
+			if (count< tempo) begin
+				shift <= 0;
+			   count <= count + 1;
+			end			
+			if (count == tempo) begin
+				count <= 0;
+				shift <= 1; end
+			addr_count <= addr_count+1;		
+		end		
+	end
+
+endmodule
 
 
 

@@ -25,9 +25,7 @@ module rotation(
     input signed [11:0] x,
     input signed [11:0] y,
     output signed [11:0] x_rot,
-    output signed [10:0] y_rot,
-	 output signed [31:0] x_rot_large,
-	 output signed [31:0] y_rot_large
+    output signed [10:0] y_rot	
     );
 	 parameter XSIZE = 12;
 	 parameter YSIZE = 12;
@@ -38,8 +36,8 @@ module rotation(
 	 
 //	 wire signed [31:0] x_rot_large;
 //    wire signed [31:0] y_rot_large;
-//	 reg signed [31:0] x_rot_large1;
-//	 reg signed [31:0] y_rot_large1;
+	 reg signed [31:0] x_rot_large;
+	 reg signed [31:0] y_rot_large;
 	 
 	 //Want a high-precision table of arctan values; however, since our maximum iteration is 11, 
 	 //our table needs only 11 entires.  If we wanted more precise x/y values table would be larger.	 
@@ -90,12 +88,12 @@ module rotation(
 				assign y_shft = y_reg[i] >>> i;
 				
 				always@(posedge clk) begin
-//					x_reg[i+1] <= z_sign ? x_reg[i] + y_shft : x_reg[i] - y_shft;
-//				   y_reg[i+1] <= z_sign ? y_reg[i] - x_shft : y_reg[i] + x_shft;
-//					z_reg[i+1] <= z_sign ? z_reg[i] + atan[i] : z_reg[i] - atan[i];
-					x_reg[i+1] <= x_reg[i];
-					y_reg[i+1] <= y_reg[i];
-					z_reg[i+1] <= z_reg[i];
+					x_reg[i+1] <= z_sign ? x_reg[i] + y_shft : x_reg[i] - y_shft;
+				   y_reg[i+1] <= z_sign ? y_reg[i] - x_shft : y_reg[i] + x_shft;
+					z_reg[i+1] <= z_sign ? z_reg[i] + atan[i] : z_reg[i] - atan[i];
+//					x_reg[i+1] <= x_reg[i];
+//					y_reg[i+1] <= y_reg[i];
+//					z_reg[i+1] <= z_reg[i];
 				end
 			end
 	endgenerate
@@ -104,17 +102,17 @@ module rotation(
 	assign m = 311;
 	assign n = 512;
 	
-//	always@(posedge clk)begin
-//		 x_rot_large <= (x_reg[XSIZE -1] * m) >>> 9;
-//		 y_rot_large <= (y_reg[YSIZE -1] * m) >>> 9;
-//		 
-////		 x_rot_large1 <= (x_reg[XSIZE -1] * 2) >>> 1;
-////		 y_rot_large1 <= (y_reg[YSIZE -1] * 2) >>> 1;
-//	end
+	always@(posedge clk)begin
+		 x_rot_large <= (x_reg[XSIZE -1] * m) >>> 9;
+		 y_rot_large <= (y_reg[YSIZE -1] * m) >>> 9;
+		 
+//		 x_rot_large1 <= (x_reg[XSIZE -1] * 2) >>> 1;
+//		 y_rot_large1 <= (y_reg[YSIZE -1] * 2) >>> 1;
+	end
 //	assign x_rot_large = x_reg[XSIZE -1] * m / n;
-//	assign y_rot_large = y_reg[YSIZE -1] * m / n;
-	assign x_rot_large = x_reg[XSIZE -1];
-	assign y_rot_large = y_reg[XSIZE -1];
+////	assign y_rot_large = y_reg[YSIZE -1] * m / n;
+//	assign x_rot_large = x_reg[XSIZE -1];
+//	assign y_rot_large = y_reg[XSIZE -1];
 	
 	wire [31:0] y_rot_norm = 300 + y_rot_large;
 	wire [31:0] x_rot_norm = 400 + x_rot_large;
